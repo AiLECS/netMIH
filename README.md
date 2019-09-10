@@ -1,4 +1,4 @@
-# pyMIH
+# netMIH
 A .NET implementation of multiple index hashing by [Norouzi et al](https://www.cs.toronto.edu/~norouzi/research/papers/multi_index_hashing.pdf), based on a description in the [threatexchange repository](https://github.com/facebook/ThreatExchange/blob/master/hashing/hashing.pdf)
 
 ***

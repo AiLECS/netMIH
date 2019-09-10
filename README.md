@@ -42,37 +42,6 @@ var results = index.Query("fc4d8e2130177f8f6ce2a03bd27fa8e6b1067a1ac8f0068037215
 var results = index.Query("fc4d8e2130177f8f6ce2a03bd27fa8e6b1067a1ac8f0068037215df6491eee1f", 34);
 ```
 
-```cs
-
-
-
-
-# For alternate hash sizes, enter bit size at declaration
-x = MIHIndex(512)
-
-# Example - load hashes from file.
-# Update function only accepts hex strings (4 bits per char)
-PDQs = set()
-with open('ignorable.PDQ') as fi:
-    for line in fi:
-        PDQs.add(line.replace('\n', ''))
-
-# Add to index - hashes plus category name (non-string types should work, but aren't recommended)
-x.update(PDQs, 'ignorable')
-
-# Train index. Word length is internal slot/word size for individual indices (see afore mentioned documentation for more info)
-# Threshold is maximum hamming distance (inclusive). Defaults to values shown here.
-x.train(wordLength=16,threshold=32)
-
-# To query, pass in a hex string
-for y in x.query('358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071927'):
-    # hits are returned as a tuple of hash value and hamming distance. 
-    print(y)
-# ('358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071927', ['ignorable'], 0)
-# ('358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071928', ['ignorable'], 4)
-
-``` 
-
 ***
  ### Licensing
 This is released under an MIT licence.  

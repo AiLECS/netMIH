@@ -39,7 +39,7 @@ namespace IndexConsoleTest
             foreach (var distance in new[] {0, 10, 32, 34,256})
             {
                 watch.Restart();
-                var results = index.Query("fc4d8e2130177f8f6ce2a03bd27fa8e6b1067a1ac8f0068037215df6491eee1f", distance);
+                var results = index.Query("5e5939397879178cb96884ec81e95e68c5e54f8157a1b1b17a16f812d5d607e6", distance);
                 var count = results.Count();
                 watch.Stop();
                 Console.WriteLine($"Query took {watch.ElapsedMilliseconds}ms. {count} results returned");

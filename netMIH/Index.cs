@@ -40,7 +40,7 @@ namespace netMIH
         /// <summary>
         /// Regex for testing passed hashes for consistency with supplied hashsize
         /// </summary>
-        private Regex _regex = null;
+        public Regex _regex { get; private set; } = null;
         
         /// <summary>
         /// Size of indexed hash in bits (e.g. 256 for PDQ)
@@ -85,6 +85,8 @@ namespace netMIH
             default:
                 throw new ArgumentException("Unsupported Configuration passed");
         }
+
+        _regex = new Regex("^[a-f0-9]{" + HashSize / 4 + "}$", RegexOptions.IgnoreCase);
     }
 
     /// <summary>
@@ -116,9 +118,27 @@ namespace netMIH
         this.WordLength = wordLength;
         this.MatchThreshold = matchThreshold;
         this.WindowSize = matchThreshold / wordLength;
-
+        _regex = new Regex("^[a-f0-9]{" + HashSize / 4 + "}$", RegexOptions.IgnoreCase);
     }
     
+    /// <summary>
+    /// Returns the regex used for validating incoming hashes. NOTE
+    /// </summary>
+    /// <returns>Regex used for validating hashes</returns>
+    public Regex GetRegex()
+    {
+        return this._regex;
+    }
+    
+    /// <summary>
+    /// Return the number of items within the collection. Returns 0 if NOT trained
+    /// </summary>
+    /// <returns>If trained, number of hashes indexed. Else, 0. </returns>
+    public long Count()
+    {
+        return _items.Count;
+    }
+
     /// <summary>
     /// Add entries to index.
     /// </summary>
@@ -137,11 +157,7 @@ namespace netMIH
             _categories.Add(category);
         var offset = _categories.IndexOf(category);
 
-        if (_regex == null)
-        {
-            _regex = new Regex("^[a-f0-9]{" + HashSize/4 + "}$");
-            
-        }
+
         foreach (var hash in items)
         {
             if (!_regex.IsMatch(hash))

@@ -10,7 +10,11 @@ The threatexchange document (linked above) provides a good, 'plain English' desc
 
 ***
 ### Installation
-TODO: Pending upload/addition to nuget
+Available on NuGet
+```
+Install-Package netMIH
+```
+
 
 ***
 ### Usage
@@ -46,3 +50,4 @@ var results = index.Query("fc4d8e2130177f8f6ce2a03bd27fa8e6b1067a1ac8f0068037215
  ### Licensing
 This is released under an MIT licence.  
 ***
+

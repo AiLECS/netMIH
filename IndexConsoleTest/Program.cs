@@ -33,6 +33,7 @@ namespace IndexConsoleTest
                 index.Update(h, file);
             }
             var watch = System.Diagnostics.Stopwatch.StartNew();
+            
             var trained = index.Train();
             watch.Stop();
             Console.WriteLine($"Training took {watch.ElapsedMilliseconds}ms for {trained} unique records");

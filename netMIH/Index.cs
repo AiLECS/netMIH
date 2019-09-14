@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace netMIH
 {
@@ -189,38 +190,38 @@ namespace netMIH
             return 0;
         }
 
-        _index = new ConcurrentDictionary<string, List<int>>[HashSize / WordLength];
+
         _items = new List<Tuple<BitArray, IEnumerable<int>>>(_trainingData.Keys.Count);
+        _index = new ConcurrentDictionary<string, List<int>>[HashSize / WordLength];
         for (var i = 0; i < _index.Count(); i++)
         {
             _index[i] = new ConcurrentDictionary<string, List<int>>();
         }
-
-
-        // Build item list and index.
-        // Division of Wordlength and hashsize by 4 to reflect hex string format (4 bits per char) 
-        var counter = 0;
-        foreach (var hash in _trainingData.Keys)
+        
+        //build item list. Originally did this in parallel with index generation, but unacceptable memory overhead in larger corpora
+        foreach (var hash in _trainingData.Keys.ToList())
         {
             _items.Add(new Tuple<BitArray, IEnumerable<int>>(FromHex(hash), _trainingData[hash].ToArray()));
-            // avoid modified closure - make "local" copy of counter
-            var c1 = counter;
+        }
+        _trainingData.Clear();
+        
+        //loop through items and build index. This involves regenerating hex strings from bitarrays, but reduces memory overhead
+        Parallel.For(0, _items.Count, entry =>
+        {
+            var hash = ToHex(_items.ElementAt(entry).Item1);
             for (var slot = 0; slot < HashSize / WordLength; slot++)
             {
-                //add substring value for each slot here
-                var tempString = hash.Substring((slot * WordLength) / 4, WordLength / 4);
-                _index[slot].AddOrUpdate(tempString, new List<int>() {counter},
-                        (key, value) =>
-                        {
-                            value.Add(c1);
-                            return value;
-                        });
-                 // {counter});
-            }
-            counter++;
-        }
+                // add substring value for each slot here
+                // TODO: Instead of substring, can we just select the relevant elements in the BitArray itself?
+                _index[slot].AddOrUpdate(hash.Substring((slot * WordLength) / 4, WordLength / 4), new List<int>() {entry}, (k, v) =>
+                {
+                    v.Add(entry);
+                    return v;
+                });
 
-        _trainingData.Clear();
+            }   
+        });
+
         Trained = true;
         return _items.Count;
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using netMIH;
 using Newtonsoft.Json;
 
@@ -39,10 +40,21 @@ namespace IndexConsoleTest
             foreach (var distance in new[] {0, 10, 32, 34,256})
             {
                 watch.Restart();
-                var results = index.Query("5e5939397879178cb96884ec81e95e68c5e54f8157a1b1b17a16f812d5d607e6", distance);
+                var results = index.Query("5c336c7335202a7d7638fa3c7872f197fac1c3c9b193038929c96747d6243c3f", distance);
                 var count = results.Count();
                 watch.Stop();
                 Console.WriteLine($"Query took {watch.ElapsedMilliseconds}ms. {count} results returned");
+                if (count > 0)
+                {
+                    var sample = results.First();
+                    var sb = new StringBuilder();
+                    sb.Append("Hash: " + sample.Hash + ". Categories: ");
+                    foreach (var cat in sample.Categories)
+                    {
+                        sb.Append(cat + " ");
+                    }
+                    Console.WriteLine(sb.ToString());
+                }
             }
 
             

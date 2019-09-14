@@ -69,6 +69,16 @@ namespace netMIHUnitTests
             x.Train();
             var results = x.Query("358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071927", 0);
             Assert.IsTrue(results.Count()==1, $"Incorrect results length. Anticipated 1, received {results.Count()}");
+            Assert.IsTrue(results.First().Hash=="358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071927", $"Received unepected hash value of {results.First().Hash}");
+        }
+
+        [Test]
+        public void ConvertorTests()
+        {
+            var hashString = "358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071927";
+            var ba = netMIH.Index.FromHex(hashString);
+            var newHash = Index.ToHex(ba);
+            Assert.IsTrue(hashString.Equals(Index.ToHex(ba)), $"Hash convertor checks failed. Received {newHash}. Expected {hashString}");
         }
 
 

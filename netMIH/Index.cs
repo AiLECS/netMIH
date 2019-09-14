@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -20,12 +22,12 @@ namespace netMIH
         /// <summary>
         /// All hashes (saved as BitArray objects), mapped against array of respective categories' offset in <see cref="_categories"/>
         /// </summary>
-        private List<Tuple<BitArray, int[]>> _items = new List<Tuple<BitArray, int[]>>();
+        private List<Tuple<BitArray, IEnumerable<int>>> _items = new List<Tuple<BitArray, IEnumerable<int>>>();
         
         /// <summary>
         /// MIH index. Consists of an array (length = HashSize/WordLength) containing Dictionary of each substring of hash mapped to hash offset in <see cref="_items"/>
         /// </summary>
-        private Dictionary<string, int[]>[] _index;
+        private ConcurrentDictionary<string, List<int>>[] _index;
         
         /// <summary>
         /// Training data - Dictionary of hashes, mapped against offset of category in <see cref="_categories"/>. Cleared upon training of data (i.e. building of index) 
@@ -156,8 +158,8 @@ namespace netMIH
         if (!_categories.Contains(category))
             _categories.Add(category);
         var offset = _categories.IndexOf(category);
-
-
+        
+        
         foreach (var hash in items)
         {
             if (!_regex.IsMatch(hash))
@@ -165,16 +167,17 @@ namespace netMIH
                 throw new ArgumentException($"Invalid hex string received. Expected {HashSize/4} length. Received {hash}");
             }
 
-            if (!_trainingData.ContainsKey(hash))
+            var cleanedHash = hash.ToLower();
+            if (!_trainingData.ContainsKey(cleanedHash))
             {
-                _trainingData[hash] = new HashSet<int>();
+                _trainingData[cleanedHash] = new HashSet<int>();
             }
             
-            _trainingData[hash].Add(offset);    
+            _trainingData[cleanedHash].Add(offset);    
             
         }
     }
-    
+
     /// <summary>
     /// Train this index (makes it read-only)
     /// </summary>
@@ -185,58 +188,83 @@ namespace netMIH
         {
             return 0;
         }
-        
-        _index = new Dictionary<string, int[]>[HashSize/WordLength];
-        _items = new List<Tuple<BitArray, int[]>>(_trainingData.Keys.Count);
+
+        _index = new ConcurrentDictionary<string, List<int>>[HashSize / WordLength];
+        _items = new List<Tuple<BitArray, IEnumerable<int>>>(_trainingData.Keys.Count);
         for (var i = 0; i < _index.Count(); i++)
         {
-            _index[i] = new Dictionary<string, int[]>();
+            _index[i] = new ConcurrentDictionary<string, List<int>>();
         }
-        
-        
-        var counter = 0;
+
+
         // Build item list and index.
         // Division of Wordlength and hashsize by 4 to reflect hex string format (4 bits per char) 
+        var counter = 0;
         foreach (var hash in _trainingData.Keys)
         {
-            _items.Add(new Tuple<BitArray, int[]>(new BitArray(Encoding.ASCII.GetBytes(hash)), _trainingData[hash].ToArray()));
-            for (var slot = 0; slot < HashSize / WordLength; slot ++)
+            _items.Add(new Tuple<BitArray, IEnumerable<int>>(FromHex(hash), _trainingData[hash].ToArray()));
+            // avoid modified closure - make "local" copy of counter
+            var c1 = counter;
+            for (var slot = 0; slot < HashSize / WordLength; slot++)
             {
                 //add substring value for each slot here
-                var tempString = hash.Substring((slot * WordLength)/ 4, WordLength / 4);
-                if (!_index[slot].ContainsKey(tempString))
-                {
-                    _index[slot].Add(tempString,new int[] {counter});
-                }
-                else
-                {
-                    var tempArray = new int[_index[slot][tempString].Length + 1];
-                    tempArray[0] = counter;
-                    _index[slot][tempString].CopyTo(tempArray,1);
-                    _index[slot][tempString] = tempArray;
-                }
+                var tempString = hash.Substring((slot * WordLength) / 4, WordLength / 4);
+                _index[slot].AddOrUpdate(tempString, new List<int>() {counter},
+                        (key, value) =>
+                        {
+                            value.Add(c1);
+                            return value;
+                        });
+                 // {counter});
             }
-
             counter++;
         }
 
-        _trainingData = null;
+        _trainingData.Clear();
         Trained = true;
-        return counter;
+        return _items.Count;
+
     }
+
+  
     
     /// <summary>
     /// Convert provided BitArray to hex string
     /// </summary>
     /// <param name="hashBits">Hash as BitArray</param>
     /// <returns>hex string representing BitArray value</returns>
-    public static string ToHex(BitArray hashBits)
+    public static string ToHex(BitArray bits)
     {
-        var ret = new byte[(hashBits.Count/8)];
-        hashBits.CopyTo(ret, 0);
-        return BitConverter.ToString(ret).Replace("-", string.Empty);
+        // taken from https://stackoverflow.com/questions/37162727/c-sharp-bitarray-to-hex
+        var sb = new StringBuilder(bits.Length / 4);
+
+        for (int i = 0; i < bits.Length; i += 4) {
+            int v = (bits[i] ? 8 : 0) | 
+                    (bits[i + 1] ? 4 : 0) | 
+                    (bits[i + 2] ? 2 : 0) | 
+                    (bits[i + 3] ? 1 : 0);
+
+            sb.Append(v.ToString("x1")); // Or "X1"
+        }
+
+        return sb.ToString();
     }
 
+    public static BitArray FromHex(string hexData)
+    {
+        //taken from https://stackoverflow.com/questions/4269737/function-convert-hex-string-to-bitarray-c-sharp
+        var ba = new BitArray(4 * hexData.Length);
+        for (var i = 0; i < hexData.Length; i++)
+        {
+            var b = byte.Parse(hexData[i].ToString(), NumberStyles.HexNumber);
+            for (var j = 0; j < 4; j++)
+            {
+                ba.Set(i * 4 + j, (b & (1 << (3 - j))) != 0);
+            }
+        }
+        return ba;
+    
+    }
     /// <summary>
     /// Query against this index. Uses MIH if maxDistance set lower than or equal to <see cref="MatchThreshold"/>
     /// </summary>
@@ -250,8 +278,8 @@ namespace netMIH
         {
             throw new NotSupportedException("Index not trained yet");
         }
-        
-        var hashBits = new BitArray(Encoding.ASCII.GetBytes(hash));
+
+        var hashBits = FromHex(hash);
         if (maxDistance > MatchThreshold)
         {
             foreach (var (candidatHashBits, catOffsets) in _items)
@@ -302,7 +330,7 @@ namespace netMIH
     /// </summary>
     /// <param name="filter">Optional - return  only categories residing at provided indices</param>
     /// <returns>Enumberable of valid categories</returns>
-    public IEnumerable<string> ListCategories(int[] filter = null)
+    public IEnumerable<string> ListCategories(IEnumerable<int> filter = null)
     {
         if (filter == null)
         {

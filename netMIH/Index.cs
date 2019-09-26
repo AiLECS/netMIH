@@ -41,9 +41,10 @@ namespace netMIH
         public bool Trained { get; private set; } = false;
         
         /// <summary>
-        /// Regex for testing passed hashes for consistency with supplied hashsize
+        /// Regex for testing passed hashes for consistency with (a) format (hex) and (b) hashsize
         /// </summary>
-        public Regex _regex { get; private set; } = null;
+        /// <remarks>Ignores case, but hashes are stored as lower case</remarks>
+        public Regex Regex { get; private set; } = null;
         
         /// <summary>
         /// Size of indexed hash in bits (e.g. 256 for PDQ)
@@ -71,8 +72,9 @@ namespace netMIH
         public enum Configuration
         {
             /// <summary>
-            /// PDQ algorithm - see https://github.com/facebook/ThreatExchange/blob/master/hashing/hashing.pdf
+            /// PDQ algorithm
             /// </summary>
+            /// <remarks>see https://github.com/facebook/ThreatExchange/blob/master/hashing/hashing.pdf</remarks>
         PDQ};
     
     public Index(Configuration config)
@@ -89,7 +91,7 @@ namespace netMIH
                 throw new ArgumentException("Unsupported Configuration passed");
         }
 
-        _regex = new Regex("^[a-f0-9]{" + HashSize / 4 + "}$", RegexOptions.IgnoreCase);
+        Regex = new Regex("^[a-f0-9]{" + HashSize / 4 + "}$", RegexOptions.IgnoreCase);
     }
 
     /// <summary>
@@ -121,17 +123,9 @@ namespace netMIH
         this.WordLength = wordLength;
         this.MatchThreshold = matchThreshold;
         this.WindowSize = matchThreshold / wordLength;
-        _regex = new Regex("^[a-f0-9]{" + HashSize / 4 + "}$", RegexOptions.IgnoreCase);
+        Regex = new Regex("^[a-f0-9]{" + HashSize / 4 + "}$", RegexOptions.IgnoreCase);
     }
     
-    /// <summary>
-    /// Returns the regex used for validating incoming hashes. NOTE
-    /// </summary>
-    /// <returns>Regex used for validating hashes</returns>
-    public Regex GetRegex()
-    {
-        return this._regex;
-    }
     
     /// <summary>
     /// Return the number of items within the collection. Returns 0 if NOT trained
@@ -149,6 +143,8 @@ namespace netMIH
     /// <param name="category">Category to map against this collection of hashes</param>
     /// <exception cref="NotSupportedException">Index already trained and therefore read-only</exception>
     /// <exception cref="ArgumentException">Invalid hash received.</exception>
+    /// <remarks> Hashes are stored and returned in lower case. Theoretically, categories could be replaced with unique identifiers for each PDQ (e.g. pointing to a DB reference).
+    /// This has not been tested, though, so proceed with caution!</remarks>
     public void Update(IEnumerable<string> items, string category)
     {
         if (Trained)
@@ -163,7 +159,7 @@ namespace netMIH
         
         foreach (var hash in items)
         {
-            if (!_regex.IsMatch(hash))
+            if (!Regex.IsMatch(hash))
             {
                 throw new ArgumentException($"Invalid hex string received. Expected {HashSize/4} length. Received {hash}");
             }
@@ -182,6 +178,8 @@ namespace netMIH
     /// <summary>
     /// Train this index (makes it read-only)
     /// </summary>
+    /// <remarks>This can be a slow process! We've implemented parallel looping for part of the training,
+    /// but there remains a brief, large memory overhead.</remarks>
     /// <returns>Number unique hashes within index</returns>
     public int Train()
     {
@@ -211,6 +209,13 @@ namespace netMIH
             var hash = ToHex(_items.ElementAt(entry).Item1);
             for (var slot = 0; slot < HashSize / WordLength; slot++)
             {
+                var bits = new BitArray(WordLength);
+                for (var i = 0; i < WordLength; i++)
+                {
+                    bits[i] = _items.ElementAt(entry).Item1[(slot * WindowSize) + i];
+                }
+
+                var sub = ToHex(bits);
                 // add substring value for each slot here
                 // TODO: Instead of substring, can we just select the relevant elements in the BitArray itself?
                 _index[slot].AddOrUpdate(hash.Substring((slot * WordLength) / 4, WordLength / 4), new List<int>() {entry}, (k, v) =>
@@ -232,11 +237,11 @@ namespace netMIH
     /// <summary>
     /// Convert provided BitArray to hex string
     /// </summary>
-    /// <param name="hashBits">Hash as BitArray</param>
+    /// <param name="bits">Hash as BitArray</param>
     /// <returns>hex string representing BitArray value</returns>
+    /// <remarks>Converter based on solution found at <see cref="https://stackoverflow.com/questions/37162727/c-sharp-bitarray-to-hex"/></remarks>
     public static string ToHex(BitArray bits)
     {
-        // taken from https://stackoverflow.com/questions/37162727/c-sharp-bitarray-to-hex
         var sb = new StringBuilder(bits.Length / 4);
 
         for (int i = 0; i < bits.Length; i += 4) {
@@ -250,10 +255,19 @@ namespace netMIH
 
         return sb.ToString();
     }
-
+    
+    /// <summary>
+    /// Convert hex string to BitArray representation
+    /// </summary>
+    /// <param name="hexData">hex formatted string (4 bits per char)</param>
+    /// <example>
+    /// <code>
+    /// var bits = BitArray("358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071927");
+    /// </code></example>
+    /// <returns>BitArray representation of hex string</returns>
+    /// <remarks>Based on converter located at <see cref="https://stackoverflow.com/questions/4269737/function-convert-hex-string-to-bitarray-c-sharp"/> </remarks>
     public static BitArray FromHex(string hexData)
     {
-        //taken from https://stackoverflow.com/questions/4269737/function-convert-hex-string-to-bitarray-c-sharp
         var ba = new BitArray(4 * hexData.Length);
         for (var i = 0; i < hexData.Length; i++)
         {
@@ -266,6 +280,7 @@ namespace netMIH
         return ba;
     
     }
+    
     /// <summary>
     /// Query against this index. Uses MIH if maxDistance set lower than or equal to <see cref="MatchThreshold"/>
     /// </summary>
@@ -283,14 +298,14 @@ namespace netMIH
         var hashBits = FromHex(hash);
         if (maxDistance > MatchThreshold)
         {
-            foreach (var (candidatHashBits, catOffsets) in _items)
+            foreach (var (candidateHashBits, catOffsets) in _items)
             {
-                var hd = GetHamming(candidatHashBits, hashBits, maxDistance); 
+                var hd = GetHamming(candidateHashBits, hashBits, maxDistance); 
                 if (hd > -1)
                 {
                     yield return new Result()
                     {
-                        Hash = ToHex(candidatHashBits),
+                        Hash = ToHex(candidateHashBits),
                         Distance = hd,
                         Categories = ListCategories(catOffsets).ToArray()
                     };
@@ -330,7 +345,8 @@ namespace netMIH
     /// List categories within index
     /// </summary>
     /// <param name="filter">Optional - return  only categories residing at provided indices</param>
-    /// <returns>Enumberable of valid categories</returns>
+    /// <returns>Enumerable of categories within index</returns>
+    /// <exception cref="IndexOutOfRangeException">Offset provided in filter is not available within _categories.</exception>
     public IEnumerable<string> ListCategories(IEnumerable<int> filter = null)
     {
         if (filter == null)
@@ -389,10 +405,10 @@ namespace netMIH
         /// </summary>
         /// <param name="word">Candidate word (as BitArray)</param>
         /// <param name="distance">Maximum hamming distance (inclusive)</param>
-        /// <param name="position"></param>
-        /// <param name="entries"></param>
-        /// <returns></returns>
-        public static IEnumerable<string> getWindow(BitArray word, int distance, int position = 0,
+        /// <param name="position">Optional. Should not be provided by end user (used only in recursive calls)</param>
+        /// <param name="entries">Optional. Should not be provided by end user (used only within recursive calls)</param>
+        /// <returns>Enumerable of strings within provided hamming distance from provided word</returns>
+        public static IEnumerable<string> GetWindow(BitArray word, int distance, int position = 0,
             HashSet<string> entries = null)
         {
             if (entries == null)
@@ -420,14 +436,14 @@ namespace netMIH
                         distOffset = -1;
                     }
 
-                    entries.UnionWith(getWindow(word, distance + distOffset, position + 1, entries));
+                    entries.UnionWith(GetWindow(word, distance + distOffset, position + 1, entries));
                 }
 
                 word[position] = temp;
             }
             else
             {
-                entries.UnionWith(getWindow(word, distance, position + 1, entries));
+                entries.UnionWith(GetWindow(word, distance, position + 1, entries));
             }
 
             return entries;

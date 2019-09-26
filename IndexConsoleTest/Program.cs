@@ -11,7 +11,7 @@ namespace IndexConsoleTest
     {
         static void Main(string[] args)
         {
-            var hashes = new string[] {"358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071927","358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071928","358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071936"};
+   //         var hashes = new string[] {"358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071927","358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071928","358c86641a5269ab5b0db5f1b2315c1642cef9652c39b6ced9f646d91f071936"};
 /*
             var index = new netMIH.MIHIndex(MIHIndex.Configuration.PDQ);
             index.Update(hashes, "ignorable");

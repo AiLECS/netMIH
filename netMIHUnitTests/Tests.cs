@@ -45,10 +45,10 @@ namespace netMIHUnitTests
         [Test]
         public void CorrectWindowsGenerated()
         {
-            var windows = netMIH.Index.getWindow(new BitArray(Encoding.ASCII.GetBytes("8b")), 2, 0);
+            var windows = netMIH.Index.GetWindow(new BitArray(Encoding.ASCII.GetBytes("8b")), 2, 0);
             Assert.IsTrue(windows.Count() == 137,
                 $"HD 2 on word length 16 should generate 137 permutations. Received {windows.Count()} ");
-            windows = netMIH.Index.getWindow(new BitArray(Encoding.ASCII.GetBytes("8b")), 1, 0);
+            windows = netMIH.Index.GetWindow(new BitArray(Encoding.ASCII.GetBytes("8b")), 1, 0);
             Assert.IsTrue(windows.Count() == 17,
                 $"HD 1 on word length 16 should generate 17 permutations. Received {windows.Count()}");
         }
